@@ -3,11 +3,9 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>📻 Hunted – Walkie‑Talkie</title>
+    <title>📻 Hunted – kids editie</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -235,18 +233,20 @@
         .flex { display: flex; gap: 8px; flex-wrap: wrap; }
         .flex .btn { flex: 1; }
 
-        /* Zorg dat gameScreen zichtbaar is */
-        #gameScreen {
-            display: flex !important;
-            flex-direction: column;
-            width: 100%;
-        }
-        #gameScreen.hidden {
-            display: none !important;
-        }
-        #loginScreen.hidden {
-            display: none !important;
-        }
+        .godfather-panel { background: #0d1624; border-radius: 12px; padding: 12px; margin-top: 8px; border: 2px solid #8b5cf6; }
+        .godfather-panel h3 { color: #8b5cf6; margin-bottom: 6px; }
+        .godfather-panel .status-item { font-size: 0.85rem; padding: 4px 0; border-bottom: 1px solid #1a2a3a; }
+        .godfather-panel .btn { margin-top: 6px; }
+        .connected-users { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+        .connected-users .chip { background: #1a2332; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; border: 1px solid #2a3a4a; }
+        .chat-container { margin-top: 8px; }
+        .chat-container .messages { max-height: 120px; overflow-y: auto; font-size: 0.85rem; background: #0a0e17; border-radius: 8px; padding: 6px; }
+        .chat-container .msg { padding: 2px 4px; border-bottom: 1px solid #1a2a3a; }
+        .chat-container .msg .sender { font-weight: 600; color: #88ccff; }
+        .chat-container .msg .time { color: #667788; font-size: 0.6rem; }
+        .chat-input-row { display: flex; gap: 6px; margin-top: 4px; }
+        .chat-input-row input { flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid #2a3a4a; background: #0a0e17; color: #e0e0e0; }
+        .chat-input-row button { padding: 6px 12px; background: #4a90d9; border: none; border-radius: 6px; color: white; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -254,8 +254,8 @@
 <div id="app">
     <!-- ========== LOGIN ========== -->
     <div id="loginScreen" class="container">
-        <h1>📻 Hunted</h1>
-        <p class="sub">Dronten – met Walkie‑Talkie</p>
+        <h1>🎯 Hunted</h1>
+        <p class="sub">Kids editie – Dronten</p>
         <div class="form-group">
             <label>👤 Jouw naam (of team)</label>
             <input type="text" id="username" placeholder="Bijv. Max, Team A, Spelleider" value="Speler" />
@@ -299,12 +299,12 @@
                 <div style="font-size:0.65rem;opacity:0.7;">Rol</div>
                 <span class="badge-role" id="roleBadge">Crimineel</span>
             </div>
-            <div class="timer" id="gameTimer">60:00</div>
+            <div class="timer" id="gameTimer">--:--</div>
         </div>
 
         <!-- Status -->
         <div id="statusBar" class="card" style="text-align:center;background:#533483;border-color:#533483;padding:8px;">
-            ⏳ Wachten op start...
+            ⏳ Wachten op Spelleiding...
         </div>
 
         <!-- Dynamische inhoud per rol -->
@@ -346,7 +346,21 @@
             <div id="godfatherContent" class="hidden">
                 <div class="card" style="text-align:center;">
                     <div style="font-size:1.2rem;">👔 Spelleiding</div>
-                    <div style="color:#8899aa;font-size:0.85rem;">Je hoort alle verbonden teams en kunt met iedereen praten.</div>
+                    <div style="color:#8899aa;font-size:0.85rem;">Je bent de centrale hub. Start het spel, beheer missies en ontvang rapporten.</div>
+                </div>
+                <div class="godfather-panel">
+                    <h3>🎮 Spelbesturing</h3>
+                    <button class="btn btn-success" id="startGameBtn">🚀 Start spel</button>
+                    <button class="btn btn-danger" id="endGameBtn" style="margin-top:6px;">⏹ Stop spel</button>
+                    <div style="margin-top:8px;">
+                        <span class="status-item">Status: <span id="gfGameStatus">Niet gestart</span></span>
+                        <span class="status-item">Missie: <span id="gfCurrentMission">-</span></span>
+                        <span class="status-item">Voltooide missies: <span id="gfCompletedCount">0</span></span>
+                    </div>
+                    <div style="margin-top:6px;">
+                        <span style="font-weight:bold;">Verbonden gebruikers:</span>
+                        <div class="connected-users" id="gfUserList"><span style="color:#667788;">Geen</span></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -369,37 +383,49 @@
             </div>
             <button class="btn btn-danger" id="wtDisconnectBtn" style="margin-top:6px;padding:8px;font-size:0.8rem;">🚪 Verbinding verbreken</button>
         </div>
-
-        <!-- Firebase Chat (bestaand) -->
-        <div class="card" style="margin-top:12px;">
-            <div style="font-weight:bold;color:#88ccff;">💬 Team Chat (Firebase)</div>
-            <div id="firebaseMessages" style="max-height:100px;overflow-y:auto;font-size:0.85rem;margin:6px 0;"></div>
-            <div class="flex">
-                <input type="text" id="firebaseChatInput" placeholder="Bericht..." style="flex:1;padding:8px;border-radius:8px;border:1px solid #2a3a4a;background:#0a0e17;color:#e0e0e0;" />
-                <button class="btn btn-primary" id="firebaseSendBtn" style="flex:0 0 auto;padding:8px 16px;">📤</button>
-            </div>
-        </div>
     </div>
 </div>
 
 <script>
 // ============================================================
-// CONFIG & INIT
+// GEEN DATABASE – alles via PeerJS + Spelleiding als hub
 // ============================================================
-const firebaseConfig = {
-    apiKey: "AIzaSyB12mTMBnuxdC4W4htyFO_C7Dnh3maVKew",
-    authDomain: "decoroefening.firebaseapp.com",
-    databaseURL: "https://decoroefening-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "decoroefening",
-    storageBucket: "decoroefening.firebasestorage.app",
-    messagingSenderId: "945998495824",
-    appId: "1:945998495824:web:a76dc7519b3b262a021155"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
 
-const GAME_DURATION = 60 * 60 * 1000;
-const HEAD_START = 3 * 60 * 1000;
+// ========== KINDVRIENDELIJKE MISSIES ==========
+const MISSIONS_BASE = [
+    { id:1, lat:52.131168, lng:5.365757, cryptisch:"OC-melding: Pop wordt opgepikt.", opdracht:"Pik de pop op (oude kleren, handdoeken, masker, pruik). Maak een foto." },
+    { id:2, lat:52.131753, lng:5.368490, cryptisch:"Vluchtvoertuig gesignaleerd.", opdracht:"Kies een vluchtauto, maak een foto met de pop en de auto." },
+    { id:3, lat:52.130734, lng:5.364181, cryptisch:"Waterpistool-incident.", opdracht:"Ga naar de locatie, zorg dat je waterpistool klaar staat." },
+    { id:4, lat:52.130808, lng:5.365164, cryptisch:"Ongeluk met bus (waterballonnen).", opdracht:"Wis de sporen uit, maak de auto schoon." },
+    { id:5, lat:52.131572, lng:5.369203, cryptisch:"Overdracht Engelse drop.", opdracht:"Haal de drop op, neem de zak mee." },
+    { id:6, lat:52.130577, lng:5.367170, cryptisch:"Drop verstoppen.", opdracht:"Verstop de drop in de kelder, achter de losse steen." },
+    { id:7, lat:52.132678, lng:5.368077, cryptisch:"Omkoping met drop.", opdracht:"Koop de bewaker om met een zak drop, maak een foto." }
+];
+
+// ============================================================
+// GLOBALE STATE (zonder database)
+// ============================================================
+let myRole = '', myClass = '', myName = '';
+let gameState = {
+    started: false,
+    startTime: null,
+    currentMissionIndex: -1,
+    completedMissions: {},
+    arrest: null,
+    location: null,  // laatste ping
+};
+let map = null, missionMarker = null, fugitiveMarker = null;
+let currentMissionIndex = -1;
+let missionStartOffsets = [];
+
+// ============================================================
+// PEERJS WALKIE‑TALKIE + DATA SYNC
+// ============================================================
+let peer = null, localStream = null, isSpeaking = false;
+let connections = [];           // alle data verbindingen
+let remoteStreams = new Map();  // peerId -> audio stream
+let isConnected = false;
+let isGodfather = false;
 
 // DOM refs
 const loginScreen = document.getElementById('loginScreen');
@@ -431,10 +457,6 @@ const wtChatInput = document.getElementById('wtChatInput');
 const wtChatSendBtn = document.getElementById('wtChatSendBtn');
 const wtDisconnectBtn = document.getElementById('wtDisconnectBtn');
 
-const firebaseMessages = document.getElementById('firebaseMessages');
-const firebaseChatInput = document.getElementById('firebaseChatInput');
-const firebaseSendBtn = document.getElementById('firebaseSendBtn');
-
 const mapDiv = document.getElementById('map');
 const missionBody = document.getElementById('missionBody');
 const completeMissionBtn = document.getElementById('completeMissionBtn');
@@ -449,33 +471,14 @@ const arrestCircumstances = document.getElementById('arrestCircumstances');
 const arrestEvidence = document.getElementById('arrestEvidence');
 const arrestBtn = document.getElementById('arrestBtn');
 
-// ============================================================
-// GLOBALE STATE
-// ============================================================
-let myRole = '', myClass = '', myName = '';
-let gameStartTime = null;
-let map = null, missionMarker = null, fugitiveMarker = null;
-let completedMissions = {};
-let currentMissionIndex = -1;
-let missionStartOffsets = [];
-const MISSIONS_BASE = [
-    { id:1, lat:52.131168, lng:5.365757, cryptisch:"OC-melding: Verdachte ontmoeting.", opdracht:"Pik handlanger op, neem goud mee. Maak foto." },
-    { id:2, lat:52.131753, lng:5.368490, cryptisch:"Vluchtvoertuig gesignaleerd.", opdracht:"Kies vluchtauto, maak foto met handlanger." },
-    { id:3, lat:52.130734, lng:5.364181, cryptisch:"Vuurgevecht parkeerterrein.", opdracht:"Ga naar locatie, zorg dat wapen onder controle is." },
-    { id:4, lat:52.130808, lng:5.365164, cryptisch:"Ongeluk met Connexxionbus.", opdracht:"Wis sporen uit, auto leegmaken." },
-    { id:5, lat:52.131572, lng:5.369203, cryptisch:"Overdracht documenten.", opdracht:"Haal documenten op, neem poeder mee." },
-    { id:6, lat:52.130577, lng:5.367170, cryptisch:"Kelderruimte loods.", opdracht:"Breng goud naar kelder, achter steen." },
-    { id:7, lat:52.132678, lng:5.368077, cryptisch:"Omkoping beveiliger.", opdracht:"Koopt beveiliger om, maak foto." }
-];
+const gfGameStatus = document.getElementById('gfGameStatus');
+const gfCurrentMission = document.getElementById('gfCurrentMission');
+const gfCompletedCount = document.getElementById('gfCompletedCount');
+const gfUserList = document.getElementById('gfUserList');
 
 // ============================================================
-// WALKIE‑TALKIE (PeerJS)
+// PEERJS FUNCTIES
 // ============================================================
-let peer = null, localStream = null, isSpeaking = false;
-let wtConnections = [];
-let remoteStreams = new Map();
-let isWTConnected = false;
-
 function getPeerId(role, klasse) {
     if (role === 'godfather') return 'SPELLEIDINGHUNTED';
     const klas = klasse.toUpperCase();
@@ -523,39 +526,140 @@ function wtUpdateUserList() {
         html += `<div class="user-chip"><span>👤</span> ${pid.substring(0,12)}...</div>`;
     });
     wtUserList.innerHTML = html;
+    // Update Godfather user list
+    if (isGodfather) {
+        gfUserList.innerHTML = '';
+        remoteStreams.forEach((_, pid) => {
+            const chip = document.createElement('span');
+            chip.className = 'chip';
+            chip.textContent = pid.substring(0,12)+'...';
+            gfUserList.appendChild(chip);
+        });
+        if (remoteStreams.size === 0) gfUserList.innerHTML = '<span style="color:#667788;">Geen</span>';
+    }
 }
 
 function wtSendChat(text) {
-    if (!isWTConnected) return;
+    if (!isConnected) return;
     const data = { type:'chat', sender:myName, role:myRole, text, timestamp:Date.now() };
-    wtConnections.forEach(c => { try { c.send(data); } catch(e) {} });
+    connections.forEach(c => { try { c.send(data); } catch(e) {} });
     wtAddChat(`📤 ${myName}`, text);
 }
 
 function wtHandleData(conn, data) {
+    // console.log('Data ontvangen:', data.type, data);
     if (data.type === 'hello') {
         wtAddChat(`👋 ${data.username} (${data.role})`, `verbonden`, true);
         conn.send({ type:'hello_ack', username:myName, role:myRole, klasse:myClass });
         wtUpdateUserList();
+        // Als godfather, stuur huidige game state
+        if (isGodfather) sendGameStateToPeer(conn);
     }
     if (data.type === 'hello_ack') {
         wtAddChat(`👋 ${data.username} (${data.role})`, `bevestigd`, true);
         wtUpdateUserList();
+        // Als we geen godfather zijn, vraag de state op
+        if (!isGodfather) {
+            conn.send({ type:'request_state' });
+        }
+    }
+    if (data.type === 'request_state') {
+        if (isGodfather) sendGameStateToPeer(conn);
+    }
+    if (data.type === 'game_state') {
+        // Ontvang game state van godfather
+        updateGameState(data.state);
     }
     if (data.type === 'chat') {
         wtAddChat(`💬 ${data.sender} (${data.role})`, data.text);
-        if (myRole === 'godfather') {
-            wtConnections.forEach(c => {
+        if (isGodfather) {
+            connections.forEach(c => {
                 if (c !== conn) { try { c.send(data); } catch(e) {} }
             });
         }
     }
+    if (data.type === 'mission_complete') {
+        if (isGodfather) {
+            // Verwerk voltooiing
+            const { missionId, teamName, klasse } = data;
+            gameState.completedMissions[missionId] = true;
+            wtAddChat('✅ Godfather', `Missie ${missionId} volbracht door ${teamName} (${klasse})`, true);
+            // Stuur update naar alle peers
+            broadcastGameState();
+            // Update eigen UI
+            updateUIForGameState();
+        }
+    }
+    if (data.type === 'arrest') {
+        if (isGodfather) {
+            gameState.arrest = data;
+            wtAddChat('🚨 Godfather', `Arrestatie gemeld door ${data.by}`, true);
+            broadcastGameState();
+            updateUIForGameState();
+        }
+    }
+    if (data.type === 'ping') {
+        if (isGodfather) {
+            // Sla locatie op en stuur door naar alle hunters in deze klasse
+            // We sturen de ping door naar alle peers (behalve afzender)
+            const pingMsg = { type:'ping', ...data };
+            connections.forEach(c => {
+                if (c !== conn) { try { c.send(pingMsg); } catch(e) {} }
+            });
+            // Update eigen state
+            gameState.location = data;
+            updateUIForGameState();
+        } else {
+            // Ontvangen ping
+            gameState.location = data;
+            updateUIForGameState();
+        }
+    }
+}
+
+function sendGameStateToPeer(conn) {
+    conn.send({
+        type: 'game_state',
+        state: {
+            started: gameState.started,
+            startTime: gameState.startTime,
+            currentMissionIndex: gameState.currentMissionIndex,
+            completedMissions: gameState.completedMissions,
+            arrest: gameState.arrest,
+            location: gameState.location
+        }
+    });
+}
+
+function broadcastGameState() {
+    const state = {
+        started: gameState.started,
+        startTime: gameState.startTime,
+        currentMissionIndex: gameState.currentMissionIndex,
+        completedMissions: gameState.completedMissions,
+        arrest: gameState.arrest,
+        location: gameState.location
+    };
+    connections.forEach(c => {
+        try { c.send({ type:'game_state', state }); } catch(e) {}
+    });
+    updateUIForGameState();
+}
+
+function updateGameState(state) {
+    gameState.started = state.started;
+    gameState.startTime = state.startTime;
+    gameState.currentMissionIndex = state.currentMissionIndex;
+    gameState.completedMissions = state.completedMissions || {};
+    gameState.arrest = state.arrest;
+    gameState.location = state.location;
+    updateUIForGameState();
 }
 
 function wtStartSpeaking() {
     if (isSpeaking) return;
-    if (!isWTConnected) { wtAddChat('⚠️ Systeem','Niet verbonden!',true); return; }
-    if (wtConnections.length === 0 && myRole !== 'godfather') {
+    if (!isConnected) { wtAddChat('⚠️ Systeem','Niet verbonden!',true); return; }
+    if (connections.length === 0 && !isGodfather) {
         wtAddChat('⚠️ Systeem','Niemand verbonden!',true); return;
     }
     isSpeaking = true;
@@ -595,17 +699,19 @@ async function wtInit() {
     peer = new Peer(peerId);
 
     peer.on('open', (id) => {
-        isWTConnected = true;
+        isConnected = true;
         wtUpdateStatus('online', 'Online');
         wtAddChat('📻 Systeem', `Verbonden als ${id}`, true);
         pttButton.disabled = false;
         wtChatInput.disabled = false;
         wtChatSendBtn.disabled = false;
 
-        if (myRole !== 'godfather') {
+        if (!isGodfather) {
+            // Verbind met godfather
             const target = 'SPELLEIDINGHUNTED';
             const conn = peer.connect(target);
-            wtSetupConnection(conn);
+            setupDataConnection(conn);
+            // Audio call naar godfather
             const call = peer.call(target, localStream);
             call.on('stream', (remoteStream) => {
                 remoteStreams.set(target, remoteStream);
@@ -620,9 +726,10 @@ async function wtInit() {
             });
         }
 
-        peer.on('connection', (conn) => { wtSetupConnection(conn); });
+        // Luister naar inkomende verbindingen
+        peer.on('connection', (conn) => { setupDataConnection(conn); });
         peer.on('call', (call) => {
-            if (myRole === 'godfather') {
+            if (isGodfather) {
                 call.answer(localStream);
                 call.on('stream', (remoteStream) => {
                     remoteStreams.set(call.peer, remoteStream);
@@ -668,7 +775,7 @@ async function wtInit() {
     });
 
     peer.on('disconnected', () => {
-        isWTConnected = false;
+        isConnected = false;
         wtUpdateStatus('offline', 'Verbinding verbroken');
         pttButton.disabled = true;
         wtChatInput.disabled = true;
@@ -678,10 +785,10 @@ async function wtInit() {
     });
 }
 
-function wtSetupConnection(conn) {
+function setupDataConnection(conn) {
     conn.on('open', () => {
-        if (!wtConnections.some(c => c.peer === conn.peer)) {
-            wtConnections.push(conn);
+        if (!connections.some(c => c.peer === conn.peer)) {
+            connections.push(conn);
             wtUpdateUserList();
             wtAddChat('🔗 Systeem', `Verbonden met ${conn.peer}`, true);
             conn.send({
@@ -695,7 +802,7 @@ function wtSetupConnection(conn) {
     });
     conn.on('data', (data) => { wtHandleData(conn, data); });
     conn.on('close', () => {
-        wtConnections = wtConnections.filter(c => c !== conn);
+        connections = connections.filter(c => c !== conn);
         remoteStreams.delete(conn.peer);
         wtUpdateUserList();
         wtAddChat('🔌 Systeem', `Verbinding met ${conn.peer} verbroken`, true);
@@ -716,9 +823,9 @@ function wtPlayRemote(stream) {
 
 function wtDisconnect() {
     if (peer) { peer.destroy(); peer = null; }
-    wtConnections = [];
+    connections = [];
     remoteStreams.clear();
-    isWTConnected = false;
+    isConnected = false;
     pttButton.disabled = true;
     wtChatInput.disabled = true;
     wtChatSendBtn.disabled = true;
@@ -727,7 +834,190 @@ function wtDisconnect() {
 }
 
 // ============================================================
-// GAME FUNCTIES (Firebase)
+// GAME UI UPDATE (zonder Firebase)
+// ============================================================
+function updateUIForGameState() {
+    // Status bar
+    if (!gameState.started) {
+        statusBar.textContent = '⏳ Wachten op Spelleiding...';
+        statusBar.style.background = '#533483';
+        return;
+    }
+    if (gameState.startTime) {
+        const elapsed = Date.now() - gameState.startTime;
+        if (elapsed < 3*60*1000) {
+            const remain = Math.ceil((3*60*1000 - elapsed)/1000);
+            statusBar.textContent = `⏱️ Voorsprong: nog ${remain} sec.`;
+            statusBar.style.background = '#f39c12';
+            statusBar.style.color = '#000';
+        } else {
+            statusBar.textContent = '🔴 SPEL BEZIG!';
+            statusBar.style.background = '#0f3460';
+            statusBar.style.color = '#fff';
+        }
+    }
+
+    // Godfather panel
+    if (isGodfather) {
+        gfGameStatus.textContent = gameState.started ? 'Actief' : 'Niet gestart';
+        const idx = gameState.currentMissionIndex;
+        gfCurrentMission.textContent = (idx >= 0 && idx < MISSIONS_BASE.length) ? `Missie ${MISSIONS_BASE[idx].id}` : '-';
+        gfCompletedCount.textContent = Object.keys(gameState.completedMissions).length;
+    }
+
+    // Criminal: missies
+    if (myRole === 'criminal') {
+        if (!gameState.started) {
+            missionBody.innerHTML = 'Het spel is nog niet gestart. Wacht op de Spelleiding.';
+            completeMissionBtn.disabled = true;
+            return;
+        }
+        const idx = gameState.currentMissionIndex;
+        if (idx < 0 || idx >= MISSIONS_BASE.length) {
+            missionBody.innerHTML = 'Alle missies volbracht! 🎉';
+            completeMissionBtn.disabled = true;
+            return;
+        }
+        const m = MISSIONS_BASE[idx];
+        const done = gameState.completedMissions[m.id];
+        const card = document.getElementById('missionCard');
+        card.className = 'mission-card' + (done ? ' completed' : '');
+        missionBody.innerHTML = `
+            <div style="font-weight:bold;">${m.cryptisch}</div>
+            <div style="font-size:0.9rem;margin:4px 0;">${m.opdracht}</div>
+            <div style="font-size:0.75rem;color:#8899aa;">Missie ${m.id} - ${done ? '✅ Volbracht' : '⏳ Actief'}</div>
+        `;
+        completeMissionBtn.disabled = done;
+        if (!done) {
+            completeMissionBtn.onclick = () => completeMission(m);
+        }
+        // Map
+        if (map && !done) {
+            if (missionMarker) map.removeLayer(missionMarker);
+            missionMarker = L.marker([m.lat, m.lng]).addTo(map)
+                .bindPopup(`<b>Missie ${m.id}</b><br>${m.opdracht}`)
+                .openPopup();
+            map.setView([m.lat, m.lng], 16);
+        }
+    }
+
+    // Hunter: ping en missies
+    if (myRole === 'hunter') {
+        if (gameState.location) {
+            const loc = gameState.location;
+            lastPing.textContent = `📍 Laatst gezien om ${new Date(loc.timestamp).toLocaleTimeString('nl-NL', {hour:'2-digit',minute:'2-digit'})}`;
+            if (map) {
+                if (fugitiveMarker) fugitiveMarker.setLatLng([loc.lat, loc.lng]);
+                else {
+                    fugitiveMarker = L.marker([loc.lat, loc.lng], {
+                        icon: L.divIcon({
+                            html: '<div style="background:#e94560;width:28px;height:28px;border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:16px;">🏃</div>',
+                            iconSize: [28,28], className: ''
+                        })
+                    }).addTo(map).bindPopup('Voortvluchtigen');
+                }
+            }
+        }
+        // Volbrachte missies
+        completedList.innerHTML = '';
+        const keys = Object.keys(gameState.completedMissions);
+        if (keys.length === 0) { completedList.textContent = 'Geen volbrachte missies.'; }
+        else {
+            keys.sort((a,b)=>Number(a)-Number(b)).forEach(k => {
+                const item = document.createElement('div');
+                item.textContent = `✅ Missie ${k}`;
+                completedList.appendChild(item);
+            });
+        }
+        // Arrestatie
+        if (gameState.arrest && gameState.arrest.arrested) {
+            arrestStatus.innerHTML = `🚨 <b>ARRESTATIE BEVESTIGD</b><br>Team: ${gameState.arrest.team}<br>Door: ${gameState.arrest.by}<br>Feiten: ${gameState.arrest.facts}`;
+            arrestForm.style.display = 'none';
+        } else {
+            arrestStatus.textContent = 'Nog niet aangehouden.';
+            arrestForm.style.display = 'block';
+        }
+    }
+}
+
+// ============================================================
+// GAME ACTIES (via PeerJS data)
+// ============================================================
+function completeMission(m) {
+    if (!isConnected) { wtAddChat('⚠️ Systeem','Niet verbonden!',true); return; }
+    // Stuur naar godfather
+    const data = {
+        type: 'mission_complete',
+        missionId: m.id,
+        teamName: myName,
+        klasse: myClass,
+        timestamp: Date.now()
+    };
+    connections.forEach(c => {
+        try { c.send(data); } catch(e) {}
+    });
+    wtAddChat('📤', `Missie ${m.id} voltooid! Wacht op bevestiging...`, true);
+}
+
+function sendPing(lat, lng) {
+    if (!isConnected) return;
+    const data = {
+        type: 'ping',
+        lat, lng,
+        timestamp: Date.now(),
+        team: myName,
+        klasse: myClass
+    };
+    connections.forEach(c => {
+        try { c.send(data); } catch(e) {}
+    });
+}
+
+function sendArrest() {
+    const team = arrestTeam.value.trim() || 'Voortvluchtigen';
+    const facts = arrestFacts.value.trim();
+    const circumstances = arrestCircumstances.value.trim();
+    const evidence = arrestEvidence.value.trim();
+    if (!facts || !circumstances) { alert('Vul minimaal Feiten en Omstandigheden in.'); return; }
+    if (!isConnected) { alert('Niet verbonden met Spelleiding!'); return; }
+    const data = {
+        type: 'arrest',
+        team, facts, circumstances, evidence,
+        by: myName,
+        arrested: true,
+        timestamp: Date.now()
+    };
+    connections.forEach(c => {
+        try { c.send(data); } catch(e) {}
+    });
+    wtAddChat('📤', `Arrestatie gemeld voor ${team}`, true);
+}
+
+// ============================================================
+// SPELLEIDING (Godfather) CONTROLES
+// ============================================================
+function startGame() {
+    if (!isGodfather) return;
+    gameState.started = true;
+    gameState.startTime = Date.now();
+    gameState.currentMissionIndex = 0;
+    gameState.completedMissions = {};
+    gameState.arrest = null;
+    gameState.location = null;
+    broadcastGameState();
+    wtAddChat('👔 Spelleiding', '🚀 Spel gestart!', true);
+}
+
+function endGame() {
+    if (!isGodfather) return;
+    gameState.started = false;
+    gameState.startTime = null;
+    broadcastGameState();
+    wtAddChat('👔 Spelleiding', '⏹ Spel gestopt.', true);
+}
+
+// ============================================================
+// MAP
 // ============================================================
 function initMap() {
     if (!mapDiv) return;
@@ -737,75 +1027,24 @@ function initMap() {
             attribution: '© OpenStreetMap'
         }).addTo(map);
         setTimeout(() => map.invalidateSize(), 300);
-    } catch(e) {
-        console.warn('Leaflet fout:', e);
-    }
+    } catch(e) { console.warn('Map fout:', e); }
 }
 
-function updateMission(index) {
-    if (index < 0 || index >= MISSIONS_BASE.length) return;
-    const m = MISSIONS_BASE[index];
-    const done = completedMissions[m.id];
-    const card = document.getElementById('missionCard');
-    card.className = 'mission-card' + (done ? ' completed' : '');
-    missionBody.innerHTML = `
-        <div style="font-weight:bold;">${m.cryptisch}</div>
-        <div style="font-size:0.9rem;margin:4px 0;">${m.opdracht}</div>
-        <div style="font-size:0.75rem;color:#8899aa;">Missie ${m.id} - ${done ? '✅ Volbracht' : '⏳ Actief'}</div>
-    `;
-    completeMissionBtn.disabled = done;
-    if (!done) {
-        completeMissionBtn.onclick = () => completeMission(m);
-    }
-    if (map && !done) {
-        if (missionMarker) map.removeLayer(missionMarker);
-        missionMarker = L.marker([m.lat, m.lng]).addTo(map)
-            .bindPopup(`<b>Missie ${m.id}</b><br>${m.opdracht}`)
-            .openPopup();
-        map.setView([m.lat, m.lng], 16);
-    }
-}
-
-function completeMission(m) {
-    const data = {
-        completedAt: firebase.database.ServerValue.TIMESTAMP,
-        location: { lat: m.lat, lng: m.lng }
-    };
-    db.ref('teams/' + myClass + '/missions/' + m.id).set(data).then(() => {
-        completedMissions[m.id] = true;
-        if (currentMissionIndex < MISSIONS_BASE.length - 1 && gameStartTime) {
-            const nowOffset = Date.now() - gameStartTime;
-            missionStartOffsets[currentMissionIndex + 1] = nowOffset;
+// ============================================================
+// GEOLOCATION voor pingen (alleen criminelen)
+// ============================================================
+let watchId = null;
+function startGeolocation() {
+    if (!navigator.geolocation) return;
+    watchId = navigator.geolocation.watchPosition(pos => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        // Stuur ping elke 3 minuten via PeerJS
+        // We doen het handmatig, maar kunnen ook een timer zetten
+        if (isConnected && gameState.started) {
+            sendPing(lat, lng);
         }
-        updateMission(currentMissionIndex);
-        sendFirebaseMessage('Systeem', `✅ Missie ${m.id} volbracht door ${myName} (${myClass})`);
-    });
-}
-
-function sendFirebaseMessage(from, text) {
-    db.ref('chat').push({
-        from: from,
-        fromType: (myRole === 'criminal' ? 'fugitive' : myRole === 'hunter' ? 'hunter' : 'godfather'),
-        fromClass: myClass,
-        text: text,
-        ts: firebase.database.ServerValue.TIMESTAMP
-    });
-}
-
-function renderFirebaseMessage(m) {
-    if (!m) return;
-    const div = document.createElement('div');
-    div.style.padding = '2px 0';
-    div.style.borderBottom = '1px solid #1a2a3a';
-    const time = m.ts ? new Date(m.ts).toLocaleTimeString('nl-NL', {hour:'2-digit',minute:'2-digit'}) : '';
-    const cls = m.fromClass ? ` [${m.fromClass}]` : '';
-    div.innerHTML = `<span style="font-weight:600;color:#88ccff;">${m.from}${cls}</span> ${m.text} <span style="color:#667788;font-size:0.7rem;">${time}</span>`;
-    firebaseMessages.appendChild(div);
-    firebaseMessages.scrollTop = firebaseMessages.scrollHeight;
-}
-
-function listenFirebaseChat() {
-    db.ref('chat').limitToLast(100).on('child_added', snap => renderFirebaseMessage(snap.val()));
+    }, err => console.warn('Geo error:', err), { enableHighAccuracy: true, maximumAge: 10000 });
 }
 
 // ============================================================
@@ -821,186 +1060,58 @@ loginBtn.addEventListener('click', () => {
     myName = name;
     myRole = role;
     myClass = role === 'godfather' ? 'ALLE' : klas;
+    isGodfather = (role === 'godfather');
 
-    // UI instellen
+    // UI
     displayName.textContent = myName;
     const roleNames = { criminal:'🔫 Crimineel', hunter:'🔍 Rechercheur', godfather:'👔 Spelleiding' };
     roleBadge.textContent = roleNames[role] || role;
     roleBadge.className = 'badge-role badge-' + role;
 
-    // Toon juiste content
     criminalContent.classList.toggle('hidden', role !== 'criminal');
     hunterContent.classList.toggle('hidden', role !== 'hunter');
     godfatherContent.classList.toggle('hidden', role !== 'godfather');
 
-    // Schakel schermen
     loginScreen.classList.add('hidden');
     gameScreen.classList.remove('hidden');
 
-    // Map initialiseren (alleen voor criminal en hunter)
     if (role === 'criminal' || role === 'hunter') {
         setTimeout(initMap, 100);
+        if (role === 'criminal') startGeolocation();
     }
-
-    // Firebase listeners starten
-    listenGame();
-    listenFirebaseChat();
 
     // Walkie-Talkie starten
     setTimeout(wtInit, 200);
 
-    // Hunter specifiek
-    if (role === 'hunter') {
-        listenLocation();
-        listenCompletions();
-        listenArrest();
+    // Godfather extra listeners
+    if (isGodfather) {
+        document.getElementById('startGameBtn').addEventListener('click', startGame);
+        document.getElementById('endGameBtn').addEventListener('click', endGame);
     }
 
-    // Firebase chat send
-    firebaseSendBtn.onclick = () => {
-        const txt = firebaseChatInput.value.trim();
-        if (!txt) return;
-        sendFirebaseMessage(myName, txt);
-        firebaseChatInput.value = '';
-    };
-    firebaseChatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') firebaseSendBtn.click(); });
-});
+    // Arrest button (hunter)
+    arrestBtn.addEventListener('click', sendArrest);
 
-// ============================================================
-// GAME LISTENERS (Firebase)
-// ============================================================
-function listenGame() {
-    db.ref('game').on('value', snap => {
-        const g = snap.val();
-        if (!g || !g.startTime) {
-            statusBar.textContent = '⏳ Wachten op start...';
-            statusBar.style.background = '#533483';
-            statusBar.style.color = '#fff';
-            return;
-        }
-        if (g.status === 'ended') {
-            statusBar.textContent = '🏁 Spel afgelopen!';
-            statusBar.style.background = '#e74c3c';
-            statusBar.style.color = '#fff';
-            return;
-        }
-        gameStartTime = g.startTime;
-        const elapsed = Date.now() - gameStartTime;
-        if (elapsed < HEAD_START) {
-            const remain = Math.ceil((HEAD_START - elapsed) / 1000);
-            statusBar.textContent = `⏱️ Voorsprong: nog ${remain} sec.`;
-            statusBar.style.background = '#f39c12';
-            statusBar.style.color = '#000';
-        } else {
-            statusBar.textContent = '🔴 SPEL BEZIG!';
-            statusBar.style.background = '#0f3460';
-            statusBar.style.color = '#fff';
-        }
-        // Criminal: update missies
-        if (myRole === 'criminal') {
-            if (missionStartOffsets.length === 0) {
-                missionStartOffsets = MISSIONS_BASE.map((_, idx) => idx * 6 * 60 * 1000);
-            }
-            const idx = getCurrentMissionIndex();
-            if (idx !== currentMissionIndex) {
-                currentMissionIndex = idx;
-                updateMission(idx);
-            }
-        }
-    });
-}
-
-function getCurrentMissionIndex() {
-    if (!gameStartTime) return 0;
-    const elapsed = Date.now() - gameStartTime;
-    let idx = 0;
-    for (let i = 0; i < missionStartOffsets.length; i++) {
-        if (missionStartOffsets[i] <= elapsed) idx = i;
-    }
-    return Math.min(idx, MISSIONS_BASE.length - 1);
-}
-
-// Timer update
-setInterval(() => {
-    if (gameStartTime) {
-        const remain = (gameStartTime + GAME_DURATION) - Date.now();
-        if (remain <= 0) {
-            gameTimer.textContent = '00:00';
-            gameTimer.classList.add('warning');
-        } else {
+    // Timer update
+    setInterval(() => {
+        if (gameState.started && gameState.startTime) {
+            const elapsed = Date.now() - gameState.startTime;
+            const total = 60*60*1000;
+            const remain = Math.max(0, total - elapsed);
             const m = Math.floor(remain / 60000);
             const s = Math.floor((remain % 60000) / 1000);
             gameTimer.textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
-            if (remain < 5 * 60 * 1000) gameTimer.classList.add('warning');
+            if (remain < 5*60*1000) gameTimer.classList.add('warning');
             else gameTimer.classList.remove('warning');
-        }
-    }
-}, 1000);
-
-// ============================================================
-// HUNTER SPECIFIEKE LISTENERS
-// ============================================================
-function listenLocation() {
-    db.ref('teams/' + myClass + '/location').on('value', snap => {
-        const loc = snap.val();
-        if (!loc) return;
-        db.ref('game/startTime').once('value', s => {
-            const start = s.val();
-            if (!start || Date.now() - start < HEAD_START) return;
-            if (!map) return;
-            if (fugitiveMarker) fugitiveMarker.setLatLng([loc.lat, loc.lng]);
-            else {
-                fugitiveMarker = L.marker([loc.lat, loc.lng], {
-                    icon: L.divIcon({
-                        html: '<div style="background:#e94560;width:28px;height:28px;border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:16px;">🏃</div>',
-                        iconSize: [28,28], className: ''
-                    })
-                }).addTo(map).bindPopup('Voortvluchtigen');
-            }
-            lastPing.textContent =
-                `📍 Laatst gezien om ${new Date(loc.ts).toLocaleTimeString('nl-NL', {hour:'2-digit',minute:'2-digit'})}`;
-        });
-    });
-}
-
-function listenCompletions() {
-    db.ref('teams/' + myClass + '/missions').on('value', snap => {
-        const v = snap.val() || {};
-        completedList.innerHTML = '';
-        const keys = Object.keys(v);
-        if (keys.length === 0) { completedList.textContent = 'Geen volbrachte missies.'; return; }
-        keys.sort((a,b) => Number(a)-Number(b)).forEach(k => {
-            const item = document.createElement('div');
-            item.textContent = `✅ Missie ${k} om ${new Date(v[k].completedAt).toLocaleTimeString('nl-NL', {hour:'2-digit',minute:'2-digit'})}`;
-            completedList.appendChild(item);
-        });
-    });
-}
-
-function listenArrest() {
-    db.ref('teams/' + myClass + '/arrest').on('value', snap => {
-        const a = snap.val();
-        if (a && a.arrested) {
-            arrestStatus.innerHTML = `🚨 <b>ARRESTATIE BEVESTIGD</b><br>Team: ${a.team}<br>Door: ${a.by}<br>Feiten: ${a.facts}`;
-            arrestForm.style.display = 'none';
         } else {
-            arrestStatus.textContent = 'Nog niet aangehouden.';
-            arrestForm.style.display = 'block';
+            gameTimer.textContent = '--:--';
         }
-    });
-}
-arrestBtn.addEventListener('click', () => {
-    const team = arrestTeam.value.trim() || 'Voortvluchtigen';
-    const facts = arrestFacts.value.trim();
-    const circumstances = arrestCircumstances.value.trim();
-    const evidence = arrestEvidence.value.trim();
-    if (!facts || !circumstances) { alert('Vul minimaal Feiten en Omstandigheden in.'); return; }
-    if (!confirm(`Bevestig arrestatie van ${team}?`)) return;
-    db.ref('teams/' + myClass + '/arrest').set({
-        team, facts, circumstances, evidence,
-        by: myName, arrested: true, timestamp: firebase.database.ServerValue.TIMESTAMP
-    });
-    sendFirebaseMessage('Systeem', `🚨 ARRESTATIE: ${team} aangehouden door ${myName}`);
+        // Update missie timer (alleen voor criminal)
+        if (myRole === 'criminal' && gameState.started && gameState.currentMissionIndex >= 0) {
+            // We kunnen de missie timer weergeven, maar we gebruiken geen vaste 6 minuten meer
+            // We tonen gewoon de missie index
+        }
+    }, 1000);
 });
 
 // ============================================================
